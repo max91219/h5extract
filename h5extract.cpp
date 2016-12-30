@@ -3,6 +3,7 @@
 #include <vector>
 #include <complex>
 #include <H5Cpp.h>
+#include <H5CommonFG.h>
 
 using namespace std;
 using namespace H5;
@@ -43,6 +44,20 @@ DataSpace dataspace_from_LS(int R, bool is_complex, hsize_t const *Ltot, hsize_t
    L[0] = V.size();
    return dataspace_from_LS(1, true, L, L, S);
 }
+
+   void read_sigmak_into(vector<complex<double>>& V, string datasetPath, H5File& fp)
+   {
+    DataSet ds = fp.openDataSet(datasetPath.c_str());
+    DataSpace d_space = ds.getSpace();
+
+    static const unsigned int Rank = 3;
+    hsize_t dims_out[Rank];
+    d_space.getSimpleExtentDims(dims_out, NULL);
+    V.resize(dims_out[0]*dims_out[1]);
+
+    ds.read(&V[0], PredType::NATIVE_DOUBLE, data_space_for_vector(V), d_space, H5P_DEFAULT);
+   }
+
    void read_vertex_into(vector<complex<double>>& V, string datasetPath, H5File& fp)
    {
     DataSet ds = fp.openDataSet(datasetPath.c_str());
@@ -84,9 +99,8 @@ DataSpace dataspace_from_LS(int R, bool is_complex, hsize_t const *Ltot, hsize_t
 
 int main(int argc, char* argv[])
 {
-    if (argc != 3 && argc != 4) 
+    if (argc < 3) 
     {
-      std::cout << argc << std::endl;
       cout << "Usage: h5extract HDFFILE DATASET [BOSONIC FREQ FOR VERTEX]" << endl;
       exit(1);
     }
@@ -95,22 +109,19 @@ int main(int argc, char* argv[])
     H5File fp(ifn.c_str(),H5F_ACC_RDONLY);
 
     string datasetPath = argv[2];
+   
+    // work out the number of frequency indices in the grid
+    Group dsgrids = fp.openGroup(datasetPath+"/grids");
+    int num_freqs = dsgrids.getNumObjs();
 
-
-   if(argc == 3) // for reading a complex function of one Matsubara freq.
+   if (num_freqs == 3) // must be a vertex function
    {
-    string datasetPath1 = datasetPath + "/data";
-    string datasetPath2 = datasetPath + "/grids/0/values";
-    vector<complex<double>> V;
-    vector<complex<double>> grid;
-    read_into(V, datasetPath1, fp);
-    read_into(grid, datasetPath2, fp);
+    if (argc != 4) 
+    {
+      cout << "Need to specify bosonic frequency for vertex function" << endl;
+      exit(1);
+    }
 
-    for(int i = 0; i < V.size(); ++i)
-      std::cout << imag(grid[i]) << " " << real(V[i]) << " " << imag(V[i]) << std::endl;
-   }
-   else // read a complex function of three Matsubara frequencies
-   {
     int bosonic_index = atoi(argv[3]);
 
     string datasetPath1 = datasetPath + "/data";
@@ -140,6 +151,40 @@ int main(int argc, char* argv[])
          std::cout << std::endl;
     }
    }
+   else if (num_freqs == 2) // must be a sigma(k,k')
+   {
+         string datasetPath1 = datasetPath + "/data";
+         string datasetPath2 = datasetPath + "/grids/0/values";
+         string datasetPath3 = datasetPath + "/grids/1/values";
+         vector<complex<double>> V;
+         vector<double> grid1;
+         vector<double> grid2;
+         read_sigmak_into(V, datasetPath1, fp);
+         read_into(grid1, datasetPath2, fp);
+         read_into(grid2, datasetPath3, fp);
+
+         for(int i = 0; i < V.size(); ++i)
+         {
+            int n1 = i % int(grid1.size());
+            int n2 = i / int(grid1.size());
+            std::cout << grid1[n1] << " " << grid2[n2] << " " << real(V[i]) << " " << imag(V[i]) << std::endl;
+
+            if (n1 == grid1.size()-1)
+               std::cout << std::endl;
+         }
+      } 
+      else if (num_freqs == 1) //must be a Green function
+      {
+         string datasetPath1 = datasetPath + "/data";
+         string datasetPath2 = datasetPath + "/grids/0/values";
+         vector<complex<double>> V;
+         vector<complex<double>> grid;
+         read_into(V, datasetPath1, fp);
+         read_into(grid, datasetPath2, fp);
+
+         for(int i = 0; i < V.size(); ++i)
+            std::cout << imag(grid[i]) << " " << real(V[i]) << " " << imag(V[i]) << std::endl;
+      }
 
    // close the HDF5 file
     fp.close();
