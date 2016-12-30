@@ -139,7 +139,6 @@ int main(int argc, char* argv[])
 
     int start = ((grid0.size()-1)/2 + bosonic_index)*grid1.size()*grid2.size();
     int end = ((grid0.size()-1)/2 + bosonic_index + 1)*grid1.size()*grid2.size();
-    std::cout << start << " " << end << " " << grid0.size() << " " << grid1.size() << " " << grid2.size() << std::endl;
 
     for(int i = start; i < end; ++i)
     {
