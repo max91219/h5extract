@@ -5,6 +5,7 @@
 #include <H5Cpp.h>
 #include <H5CommonFG.h>
 #include <triqs/gfs.hpp>
+#include <triqs/utility/legendre.hpp>
 #include <boost/program_options.hpp>
 
 using namespace std;
@@ -107,6 +108,10 @@ int main(int argc, char* argv[]) {
     ("file,f", po::value<std::string>()->default_value("output.h5"), "input HDF5 file")
     ("dataset_path,p", po::value<std::string>()->required(), "Path to the dataset in the file")
     ("TRIQS,t", po::bool_switch()->default_value(false), "TRIQS output")
+    ("G_iw,g", po::bool_switch()->default_value(false), "Green's function imfreq")
+    ("G_l,l", po::bool_switch()->default_value(false), "Green's function Legendre")
+    ("G4_iw,v", po::bool_switch()->default_value(false), "Vertex imfreq")
+    ("G4_l,v", po::bool_switch()->default_value(false), "Vertex legendre")
     ("bosonic_index,m", po::value<int>()->default_value(0), "Bosonic freqency to print");
   po::variables_map vm;
 
@@ -130,7 +135,80 @@ int main(int argc, char* argv[]) {
 
   if(TRIQS) { //TRIQS output
 
-    //WILL IMPLIMENT
+    bool G_imfreq = vm["G_iw"].as<bool>();
+    bool G_legendre = vm["G_l"].as<bool>();
+    bool V_imfreq = vm["G4_iw"].as<bool>();
+    bool V_legendre = vm["G4_l"].as<bool>();
+    string in_file = vm["file"].as<string>();
+    string tag = vm["dataset_path"].as<string>();
+    int bosonic_index = vm["bosonic_index"].as<int>();
+
+    if (G_imfreq) {
+
+      triqs::gfs::block_gf<triqs::gfs::imfreq> G_iw;
+
+      triqs::h5::file inputfile(in_file, 'r');
+      h5_read(inputfile, tag , G_iw);
+      inputfile.close();
+
+      for (const auto p : G_iw[0].mesh()) {
+        std::cout << imag(static_cast<std::complex<double> >(p)) << " " << real(G_iw[0][p](0,0)) << " " <<  imag(G_iw[0][p](0,0))
+                  << " " <<  real(G_iw[1][p](0,0)) << " " <<  imag(G_iw[1][p](0,0))
+                  << " " << std::endl;
+      }
+
+    } else if (G_legendre) {
+
+      triqs::gfs::block_gf<triqs::gfs::legendre> G_l;
+
+      triqs::h5::file inputfile(in_file, 'r');
+      h5_read(inputfile, tag , G_l);
+      inputfile.close();
+
+      for (const auto p : G_l[0].mesh()) {
+        std::cout << real(static_cast<std::complex<double> >(p)) << " " << real(G_l[0][p](0,0)) << " " <<  imag(G_l[0][p](0,0))
+                  << " " <<  real(G_l[1][p](0,0)) << " " <<  imag(G_l[1][p](0,0))
+                  << " " << std::endl;
+      }
+
+    } else if (V_imfreq) {
+
+      triqs::gfs::gf<triqs::gfs::cartesian_product<triqs::gfs::imfreq, triqs::gfs::imfreq, triqs::gfs::imfreq>, triqs::gfs::scalar_valued> G4_iw;
+
+      triqs::h5::file inputfile(in_file, 'r');
+      h5_read(inputfile, tag , G4_iw);
+      inputfile.close();
+
+      for (auto const &v1: std::get<0>(G4_iw.mesh().components())) {
+        for (auto const &v2: std::get<1>(G4_iw.mesh().components())) {
+          std::cout << std::complex<double>(v1).imag() << " " <<
+            std::complex<double>(v2).imag() << " " << G4_iw[{v1, v2, bosonic_index}].real()
+                    << " " << G4_iw[{v1, v2, bosonic_index}].imag() << std::endl;
+        }
+        //std::cout << std::endl;
+        std::cout << std::endl;
+      }
+
+
+    } else if (V_legendre) {
+
+      triqs::gfs::gf<triqs::gfs::cartesian_product<triqs::gfs::legendre, triqs::gfs::legendre, triqs::gfs::imfreq>, triqs::gfs::scalar_valued> G4_l;
+
+      triqs::h5::file inputfile(in_file, 'r');
+      h5_read(inputfile, tag , G4_l);
+      inputfile.close();
+
+      for (auto const &v1: std::get<0>(G4_l.mesh().components())) {
+        for (auto const &v2: std::get<1>(G4_l.mesh().components())) {
+          std::cout << std::complex<double>(v1).real() << " " <<
+            std::complex<double>(v2).real() << " " << G4_l[{v1, v2, bosonic_index}].real()
+                    << " " << G4_l[{v1, v2, bosonic_index}].imag() << std::endl;
+        }
+        //std::cout << std::endl;
+        std::cout << std::endl;
+      }
+
+    }
 
   } else { //OpenDF output
 
